@@ -1,7 +1,11 @@
 [package]
-name = "theorem-proving-practice"
+name = "myapp"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "One-line summary of what it does"
+license = "MIT"                       # or license-file = "LICENSE"
+authors = ["Barnaby <you@example.com>"]
+repository = "https://github.com/you/myapp"
 
 # The crate is primarily a library (all logic lives here, see docs/PROJECT_PLAN.md
 # §4); the binary is a thin front-end over it.
