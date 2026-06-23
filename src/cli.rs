@@ -30,6 +30,7 @@ pub fn run() -> Result<(), CliError> {
         Command::List => commands::list::run(&app),
         Command::Show(args) => commands::show::run(&app, args),
         Command::Delete(args) => commands::delete::run(&mut app, args),
+        Command::Open(args) => commands::open::run(&app, args),
     }
 }
 
@@ -91,6 +92,25 @@ pub enum CliError {
 
     #[error("'{query}' matches {count} theorems; use a longer id prefix")]
     AmbiguousId { query: String, count: usize },
+
+    #[error("no generated outputs yet; run `draw` first")]
+    NoOutputs,
+
+    #[error("no output file matching '{name}'")]
+    OutputNotFound { name: String },
+
+    #[error("'{name}' matches {count} output files; be more specific")]
+    AmbiguousOutput { name: String, count: usize },
+
+    #[error("could not launch opener '{opener}'")]
+    OpenerLaunch {
+        opener: String,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("opener '{opener}' exited with an error")]
+    OpenerFailed { opener: String },
 }
 
 impl CliError {
@@ -107,7 +127,12 @@ impl CliError {
             | CliError::Aborted
             | CliError::MissingId
             | CliError::TheoremNotFound { .. }
-            | CliError::AmbiguousId { .. } => 1,
+            | CliError::AmbiguousId { .. }
+            | CliError::NoOutputs
+            | CliError::OutputNotFound { .. }
+            | CliError::AmbiguousOutput { .. }
+            | CliError::OpenerLaunch { .. }
+            | CliError::OpenerFailed { .. } => 1,
         }
     }
 }

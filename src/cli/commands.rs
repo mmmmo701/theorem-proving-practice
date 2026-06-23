@@ -6,6 +6,7 @@ pub mod add;
 pub mod delete;
 pub mod draw;
 pub mod list;
+pub mod open;
 pub mod show;
 
 use crate::app::App;

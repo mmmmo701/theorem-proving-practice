@@ -11,6 +11,7 @@ mod add;
 mod delete;
 mod draw;
 mod list;
+mod open;
 
 pub use add::AddRequest;
 pub use draw::{DrawOptions, DrawOutcome};
@@ -109,6 +110,13 @@ pub enum AppError {
 
     #[error("output file {path} already exists; omit --no-clobber to replace it")]
     OutputExists { path: PathBuf },
+
+    #[error("could not read output directory {path}")]
+    OutputListing {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 impl AppError {
@@ -119,7 +127,7 @@ impl AppError {
     pub fn exit_code(&self) -> u8 {
         match self {
             AppError::Domain(_) | AppError::Selection(_) | AppError::OutputExists { .. } => 1,
-            AppError::Config(_) | AppError::Storage(_) => 2,
+            AppError::Config(_) | AppError::Storage(_) | AppError::OutputListing { .. } => 2,
             AppError::Render(_) => 3,
         }
     }

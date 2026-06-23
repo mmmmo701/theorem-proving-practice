@@ -35,6 +35,20 @@ pub enum Command {
 
     /// Delete a theorem, by id/prefix or by picking from a menu.
     Delete(DeleteArgs),
+
+    /// Open a generated output (PDF/HTML) with the system viewer.
+    Open(OpenArgs),
+}
+
+/// Arguments for the `open` command.
+///
+/// With no argument it lists the files in the output directory and prompts you
+/// to pick one. Give a file name (or a unique substring of it) to open that file
+/// directly without the menu.
+#[derive(Debug, Args)]
+pub struct OpenArgs {
+    /// Output file name, or a unique substring of it, to open without prompting.
+    pub name: Option<String>,
 }
 
 /// Arguments for the `draw` command.

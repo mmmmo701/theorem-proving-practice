@@ -6,9 +6,20 @@
 //! command's real output on stdout stays clean.
 
 use std::io::{self, Read, Write};
+use std::path::Path;
 use std::process::Command;
 
 use crate::cli::CliError;
+
+/// Env var overriding the program used to open generated files (e.g. set it to
+/// `evince` or `firefox`). Whitespace-separated args are honored, like `$EDITOR`.
+const OPENER_ENV: &str = "THEOREM_PROVING_PRACTICE_OPENER";
+
+/// Platform default file opener, used when [`OPENER_ENV`] is unset.
+#[cfg(target_os = "macos")]
+const DEFAULT_OPENER: &str = "open";
+#[cfg(not(target_os = "macos"))]
+const DEFAULT_OPENER: &str = "xdg-open";
 
 /// Prompt on stderr for a single line and return it trimmed.
 ///
@@ -84,6 +95,38 @@ pub fn edit_in_editor(initial: &str) -> Result<String, CliError> {
     let mut contents = String::new();
     std::fs::File::open(file.path())?.read_to_string(&mut contents)?;
     Ok(contents)
+}
+
+/// Open `path` with the system file handler (or the [`OPENER_ENV`] override).
+///
+/// Defaults to `open` on macOS and `xdg-open` elsewhere. We wait for the opener
+/// and treat a non-zero exit as a failure; many openers return immediately
+/// after handing off to the real viewer, so this rarely blocks for long.
+pub fn open_in_viewer(path: &Path) -> Result<(), CliError> {
+    let opener = opener_program();
+    let mut parts = opener.split_whitespace();
+    let program = parts.next().unwrap_or(DEFAULT_OPENER);
+
+    let status = Command::new(program)
+        .args(parts)
+        .arg(path)
+        .status()
+        .map_err(|source| CliError::OpenerLaunch {
+            opener: opener.clone(),
+            source,
+        })?;
+    if !status.success() {
+        return Err(CliError::OpenerFailed { opener });
+    }
+    Ok(())
+}
+
+/// The configured opener command, honoring [`OPENER_ENV`] (empty = unset).
+fn opener_program() -> String {
+    std::env::var(OPENER_ENV)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_OPENER.to_string())
 }
 
 #[cfg(test)]

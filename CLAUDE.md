@@ -12,9 +12,9 @@ formatted PDF.
 
 ```sh
 cargo build
-cargo test                 # 75 unit tests; no LaTeX engine needed
+cargo test                 # 96 unit tests; no LaTeX engine needed
 cargo test -- --ignored    # 2 extra tests that invoke real `latexmk`
-cargo run -- <add|list|show|draw|delete> ...
+cargo run -- <add|list|show|draw|delete|open> ...
 ```
 
 The two `#[ignore]`d tests in `src/render/latex.rs` actually shell out to
@@ -39,10 +39,13 @@ plus one line of wiring in `app`:
   its file extension and is what `draw --format` selects.
 - `app` — `App` holds the trait objects (note: *two* renderers — `renderer` for
   PDF, `html_renderer` for HTML); one use-case per file
-  (`add`/`draw`/`list`/`delete`). `AppError` wraps every layer error via `#[from]`.
+  (`add`/`draw`/`list`/`delete`/`open`). `open.rs` only *lists* the output dir
+  (`App::list_outputs`); the actual viewer launch is a CLI/OS side-effect, so it
+  lives in `cli/input.rs`, not here. `AppError` wraps every layer error via `#[from]`.
 - `cli` — clap args + one handler per command; `CliError` wraps `AppError`.
-  Terminal-interaction helpers (line prompts, `$EDITOR`) live in `cli/input.rs`;
-  id/prefix → single-theorem resolution is shared via `commands::resolve_unique`.
+  Terminal-interaction helpers (line prompts, `$EDITOR`, and the `open` viewer
+  launch `open_in_viewer`) live in `cli/input.rs`; id/prefix → single-theorem
+  resolution is shared via `commands::resolve_unique`.
 
 It's a library crate (`lib.rs`) with a thin binary (`main.rs`), so every layer
 is testable without spawning a process. A new front-end would be another binary
@@ -71,10 +74,10 @@ over the same library.
   `$0 < x$` would otherwise break the markup. MathJax decodes those entities
   before typesetting, so the math still renders as authored. `\` and `$` are
   never touched. Stored content is unaffected — this is render-time only.
-- **Interactive input (`add -i`, `delete -i`) writes prompts to stderr** so
-  stdout stays clean; content is entered via `$VISUAL`/`$EDITOR`/`vi` (so the
-  shell never mangles `$`/`\`). EOF on a prompt aborts rather than looping —
-  preserve that when adding prompts.
+- **Interactive input (`add -i`, `delete -i`, `open`'s menu) writes prompts to
+  stderr** so stdout stays clean; content is entered via `$VISUAL`/`$EDITOR`/`vi`
+  (so the shell never mangles `$`/`\`). EOF on a prompt aborts rather than
+  looping — preserve that when adding prompts.
 - **`draw` mutates state.** By default it *records* the draw (bumps each chosen
   theorem's `draw_count` / `last_drawn_at` via `Repository::update`) so the
   forgetting-curve weighting stays current — so it takes `&mut App`, and the
@@ -85,10 +88,24 @@ over the same library.
   successful render. Selectors stay pure: "now" is passed in via
   `DrawRequest.now`, not read from a clock. Curve constants (`S0`, growth,
   floor) live in `selection/forgetting.rs`.
-- **Runtime dirs `data/` and `output/` are git-ignored** and created on first
-  run. `data/theorems.json` uses a versioned envelope (`{"version":1,...}`) —
-  bump `CURRENT_VERSION` in `storage/json_store.rs` and handle migration if the
-  on-disk shape changes.
+- **Runtime dirs are per-user and fixed, not cwd-relative.** `Config::load`
+  (the binary's path) resolves `data_dir`/`output_dir` to
+  `$XDG_DATA_HOME/theorem-proving-practice/{data,output}`, falling back to
+  `~/.local/share/...`, so an installed binary (`.deb`) behaves identically from
+  any directory. Each is overridable by env (`THEOREM_PROVING_PRACTICE_DATA_DIR`
+  / `THEOREM_PROVING_PRACTICE_OUTPUT_DIR`); only if neither `XDG_DATA_HOME` nor
+  `HOME` is set do we fall back to cwd-relative `data/`/`output/`. **Important:**
+  `Config::default` still returns those *relative* paths — it exists for tests
+  (which build `Config { data_dir: tmp, .. }` directly); don't route the binary
+  through it. Resolution logic + env-var names live in `config.rs`. The dirs are
+  created on first run. `data/theorems.json` uses a versioned envelope
+  (`{"version":1,...}`) — bump `CURRENT_VERSION` in `storage/json_store.rs` and
+  handle migration if the on-disk shape changes.
+- **`open` shells out to a system viewer.** Default `xdg-open` (Linux) / `open`
+  (macOS), overridable via `THEOREM_PROVING_PRACTICE_OPENER` (may carry args,
+  split on whitespace like `$EDITOR`). The platform default is a `cfg`-gated
+  const in `cli/input.rs`. `open` is read-only (`&App`); it lists output files
+  newest-first and resolves a name by exact match then unique substring.
 - **Logging:** `log` facade + `env_logger`, initialized in `cli::run`. Use
   `-v`/`-vv`, or `RUST_LOG` (which overrides `-v`).
 

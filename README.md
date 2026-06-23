@@ -95,14 +95,16 @@ cargo run -- draw                 # draw 3 (default) and write today's PDF
 cargo run -- draw -n 5            # draw 5
 cargo run -- draw --seed 42       # reproducible draw (within a fixed library state)
 cargo run -- draw --no-clobber    # refuse to overwrite today's PDF
-cargo run -- draw --out-dir /tmp  # write somewhere other than output/
+cargo run -- draw --out-dir /tmp  # write to a specific dir instead of the default output dir
 cargo run -- draw --dry-run       # write the PDF but don't record the draw
 cargo run -- draw --uniform       # ignore the forgetting curve; pick uniformly
 cargo run -- draw --format html   # write a self-contained HTML sheet instead
 ```
 
-The sheet is written to `output/practice-YYYY-MM-DD.<ext>` — `.pdf` by default,
-or `.html` with `--format html`. The PDF format needs a LaTeX engine on `PATH`;
+The sheet is written as `practice-YYYY-MM-DD.<ext>` (`.pdf` by default, or
+`.html` with `--format html`) in the output directory — see
+[Where things live](#where-things-live) for its location, or override per-draw
+with `--out-dir`. The PDF format needs a LaTeX engine on `PATH`;
 the HTML format needs none — it typesets math in the browser via MathJax loaded
 from a CDN, so **viewing** an HTML sheet requires an internet connection. (Math
 written as `\begin{theorem}…` environments isn't rendered as boxes in HTML;
@@ -115,12 +117,49 @@ changes the library, re-running the same `--seed` later yields a different set;
 use `--dry-run` to preview a draw without recording it, or `--uniform` for a
 plain equal-probability draw.
 
+### Open a generated sheet
+
+Open one of the generated sheets with your system viewer (the file handler your
+desktop uses — e.g. your PDF reader or browser):
+
+```sh
+cargo run -- open                       # list the output files and pick one
+cargo run -- open practice-2026-06-23   # open by name, or a unique substring
+```
+
+With no argument, `open` lists the files in the output directory newest-first
+and prompts you to pick one (by number or name; blank cancels). Giving a name —
+or any unique substring of one — opens it directly.
+
+The opener is `xdg-open` on Linux and `open` on macOS. Override it with
+`THEOREM_PROVING_PRACTICE_OPENER` (it may include arguments, like `$EDITOR`):
+
+```sh
+THEOREM_PROVING_PRACTICE_OPENER=evince cargo run -- open
+```
+
 ## Where things live
 
-- `data/theorems.json` — the theorem library (human-readable JSON).
-- `output/practice-YYYY-MM-DD.pdf` (or `.html`) — generated practice sheets.
+By default the tool keeps everything under a fixed, per-user location so it
+behaves the same no matter which directory you run it from (important once it is
+installed system-wide, e.g. from a `.deb`):
 
-Both directories are created on first use and are git-ignored.
+- **Data** (`theorems.json`, the library): `$XDG_DATA_HOME/theorem-proving-practice/data`,
+  falling back to `~/.local/share/theorem-proving-practice/data`.
+- **Output** (`practice-YYYY-MM-DD.pdf` / `.html` sheets):
+  `…/theorem-proving-practice/output`.
+
+Both directories are created on first use. You can override either location:
+
+| Variable | Overrides |
+|----------|-----------|
+| `THEOREM_PROVING_PRACTICE_DATA_DIR`   | where the theorem library is stored |
+| `THEOREM_PROVING_PRACTICE_OUTPUT_DIR` | where practice sheets are written, and what `open` lists |
+| `THEOREM_PROVING_PRACTICE_OPENER`     | the command `open` uses to launch files |
+
+A single `draw` can also write elsewhere with `--out-dir` (see above). If neither
+`XDG_DATA_HOME` nor `HOME` is set, the tool falls back to `data/` and `output/`
+relative to the current directory.
 
 ## Diagnostics
 
