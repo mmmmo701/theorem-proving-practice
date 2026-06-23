@@ -1,0 +1,36 @@
+[package]
+name = "theorem-proving-practice"
+version = "0.1.0"
+edition = "2024"
+
+# The crate is primarily a library (all logic lives here, see docs/PROJECT_PLAN.md
+# §4); the binary is a thin front-end over it.
+[lib]
+name = "theorem_proving_practice"
+path = "src/lib.rs"
+
+[[bin]]
+name = "theorem-proving-practice"
+path = "src/main.rs"
+
+[dependencies]
+# CLI parsing
+clap = { version = "4", features = ["derive"] }
+# (De)serialization of the theorem store
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Typed, per-layer error enums
+thiserror = "2"
+# Ergonomic top-level error reporting (binary boundary only)
+anyhow = "1"
+# Timestamps for `added_at`
+chrono = { version = "0.4", features = ["serde"] }
+# Stable theorem identifiers
+uuid = { version = "1", features = ["v4", "serde"] }
+# Random selection
+rand = "0.8"
+# Isolated LaTeX build directory
+tempfile = "3"
+# Leveled diagnostics
+log = "0.4"
+env_logger = "0.11"
