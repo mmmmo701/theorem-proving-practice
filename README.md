@@ -73,6 +73,23 @@ cargo run -- show dbbe       # one theorem in full, by id or unique id prefix
 `list` includes `DRAWS` (times practiced) and `LAST DRAWN` columns; `show` adds
 `Drawn:` and `Last Drawn:` lines. A never-drawn theorem shows `—` / `never`.
 
+### Edit a theorem
+
+By id or a unique id prefix; give only the fields to change (the rest are
+kept, and the id, added date, and draw stats always survive an edit):
+
+```sh
+cargo run -- edit dbbe --name "Monotone Convergence Theorem"
+cargo run -- edit dbbe --subject "Real Analysis" --content-file mct.tex
+```
+
+Or edit every field interactively, pre-filled with the current values (the
+LaTeX content opens in your editor, seeded with the current content):
+
+```sh
+cargo run -- edit dbbe -i
+```
+
 ### Delete a theorem
 
 By id or a unique id prefix (asks to confirm first):

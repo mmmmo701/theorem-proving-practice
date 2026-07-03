@@ -29,6 +29,7 @@ pub fn run() -> Result<(), CliError> {
         Command::Draw(args) => commands::draw::run(&mut app, args),
         Command::List => commands::list::run(&app),
         Command::Show(args) => commands::show::run(&app, args),
+        Command::Edit(args) => commands::edit::run(&mut app, args),
         Command::Delete(args) => commands::delete::run(&mut app, args),
         Command::Open(args) => commands::open::run(&app, args),
     }
@@ -87,6 +88,11 @@ pub enum CliError {
     #[error("provide a theorem id to delete, or use --interactive to pick from a list")]
     MissingId,
 
+    #[error(
+        "nothing to edit: pass --subject, --name, --content, or --content-file, or use --interactive"
+    )]
+    NoEditsRequested,
+
     #[error("no theorem found matching '{query}'")]
     TheoremNotFound { query: String },
 
@@ -126,6 +132,7 @@ impl CliError {
             | CliError::EditorFailed { .. }
             | CliError::Aborted
             | CliError::MissingId
+            | CliError::NoEditsRequested
             | CliError::TheoremNotFound { .. }
             | CliError::AmbiguousId { .. }
             | CliError::NoOutputs

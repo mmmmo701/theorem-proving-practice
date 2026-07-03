@@ -10,11 +10,13 @@
 mod add;
 mod delete;
 mod draw;
+mod edit;
 mod list;
 mod open;
 
 pub use add::AddRequest;
 pub use draw::{DrawOptions, DrawOutcome};
+pub use edit::EditRequest;
 
 use std::path::PathBuf;
 

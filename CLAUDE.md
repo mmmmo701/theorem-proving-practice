@@ -14,7 +14,7 @@ formatted PDF.
 cargo build
 cargo test                 # 96 unit tests; no LaTeX engine needed
 cargo test -- --ignored    # 2 extra tests that invoke real `latexmk`
-cargo run -- <add|list|show|draw|delete|open> ...
+cargo run -- <add|list|show|edit|draw|delete|open> ...
 ```
 
 The two `#[ignore]`d tests in `src/render/latex.rs` actually shell out to
@@ -39,13 +39,15 @@ plus one line of wiring in `app`:
   its file extension and is what `draw --format` selects.
 - `app` — `App` holds the trait objects (note: *two* renderers — `renderer` for
   PDF, `html_renderer` for HTML); one use-case per file
-  (`add`/`draw`/`list`/`delete`/`open`). `open.rs` only *lists* the output dir
+  (`add`/`edit`/`draw`/`list`/`delete`/`open`). `open.rs` only *lists* the output dir
   (`App::list_outputs`); the actual viewer launch is a CLI/OS side-effect, so it
   lives in `cli/input.rs`, not here. `AppError` wraps every layer error via `#[from]`.
 - `cli` — clap args + one handler per command; `CliError` wraps `AppError`.
   Terminal-interaction helpers (line prompts, `$EDITOR`, and the `open` viewer
   launch `open_in_viewer`) live in `cli/input.rs`; id/prefix → single-theorem
-  resolution is shared via `commands::resolve_unique`.
+  resolution is shared via `commands::resolve_unique`, and the validated
+  label/editor prompt loops (`prompt_label`/`prompt_content`, used by both
+  `add -i` and `edit -i`) also live in `commands.rs`.
 
 It's a library crate (`lib.rs`) with a thin binary (`main.rs`), so every layer
 is testable without spawning a process. A new front-end would be another binary
@@ -88,6 +90,15 @@ over the same library.
   successful render. Selectors stay pure: "now" is passed in via
   `DrawRequest.now`, not read from a clock. Curve constants (`S0`, growth,
   floor) live in `selection/forgetting.rs`.
+- **`edit` is partial-update by design.** `EditRequest` (app layer) carries
+  `Option<String>` per field; `None` keeps the current value, so identity,
+  `added_at`, and draw stats always survive an edit (`App::edit` mutates the
+  fetched `Theorem` and persists via `Repository::update`). It acts on an exact
+  `TheoremId` and returns `Ok(None)` for an unknown id (mirrors `delete`'s
+  `false`); prefix resolution stays in the CLI (`resolve_unique`). Flag mode
+  with *no* fields is `CliError::NoEditsRequested`, not a silent no-op.
+  `edit -i` pre-fills prompts with current values and seeds `$EDITOR` with the
+  current content; flags passed alongside `-i` override those pre-fills.
 - **Runtime dirs are per-user and fixed, not cwd-relative.** `Config::load`
   (the binary's path) resolves `data_dir`/`output_dir` to
   `$XDG_DATA_HOME/theorem-proving-practice/{data,output}`, falling back to
@@ -111,7 +122,6 @@ over the same library.
 
 ## Not yet built (planned seams exist)
 
- - edit theorems, 
  - tags/search, 
  - more renderers (Anki; HTML is built), 
  - SQLite storage

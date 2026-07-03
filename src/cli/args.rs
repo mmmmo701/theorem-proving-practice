@@ -33,6 +33,9 @@ pub enum Command {
     /// Show one theorem in full, by id or a unique id prefix.
     Show(ShowArgs),
 
+    /// Edit a theorem's subject, name, or content, by id or a unique id prefix.
+    Edit(EditArgs),
+
     /// Delete a theorem, by id/prefix or by picking from a menu.
     Delete(DeleteArgs),
 
@@ -110,6 +113,45 @@ pub struct DeleteArgs {
     /// Delete without the confirmation prompt (useful in scripts).
     #[arg(long, short = 'y')]
     pub yes: bool,
+}
+
+/// Arguments for the `edit` command.
+///
+/// In the default (flag-driven) mode, the given fields replace the theorem's
+/// current values and omitted fields are kept; giving no field at all is a user
+/// error. With `--interactive`, every field is prompted for, pre-filled with
+/// its current value (the LaTeX content opens in `$EDITOR`); flags you also
+/// pass override those pre-fills. The arg group keeps the two content sources
+/// mutually exclusive in either mode.
+#[derive(Debug, Args)]
+#[command(group(
+    ArgGroup::new("content_src").args(["content", "content_file"])
+))]
+pub struct EditArgs {
+    /// Theorem id, or a unique prefix of it (as shown in `list`).
+    pub id: String,
+
+    /// Prompt for each field pre-filled with its current value, opening
+    /// `$EDITOR` for the LaTeX content. Sidesteps shell-escaping pitfalls
+    /// (`$`, `\`, …).
+    #[arg(long, short)]
+    pub interactive: bool,
+
+    /// New subject for the theorem.
+    #[arg(long)]
+    pub subject: Option<String>,
+
+    /// New name for the theorem.
+    #[arg(long)]
+    pub name: Option<String>,
+
+    /// New LaTeX content, given inline.
+    #[arg(long)]
+    pub content: Option<String>,
+
+    /// Path to a file whose contents become the theorem's new LaTeX.
+    #[arg(long = "content-file", value_name = "PATH")]
+    pub content_file: Option<PathBuf>,
 }
 
 /// Arguments for the `add` command.

@@ -4,9 +4,9 @@
 use std::path::PathBuf;
 
 use crate::app::{AddRequest, App};
+use crate::cli::CliError;
 use crate::cli::args::AddArgs;
-use crate::cli::{CliError, input};
-use crate::domain::{DomainError, LatexContent, Name, Subject};
+use crate::domain::{Name, Subject};
 
 pub fn run(app: &mut App, args: AddArgs) -> Result<(), CliError> {
     let request = if args.interactive {
@@ -58,56 +58,16 @@ fn resolve_content(inline: Option<String>, file: Option<PathBuf>) -> Result<Stri
 fn gather_interactively(args: AddArgs) -> Result<AddRequest, CliError> {
     eprintln!("Enter the theorem's details (press Enter to accept a [default]).");
 
-    let subject = prompt_label("Subject", args.subject, |s| Subject::new(s).map(drop))?;
-    let name = prompt_label("Name", args.name, |s| Name::new(s).map(drop))?;
+    let subject = super::prompt_label("Subject", args.subject, |s| Subject::new(s).map(drop))?;
+    let name = super::prompt_label("Name", args.name, |s| Name::new(s).map(drop))?;
     let seed = resolve_seed(args.content, args.content_file)?;
-    let content = prompt_content(seed)?;
+    let content = super::prompt_content(seed)?;
 
     Ok(AddRequest {
         subject,
         name,
         content,
     })
-}
-
-/// Prompt for a single-line label, re-prompting until it validates. A rejected
-/// entry becomes the next default so the user can edit rather than retype it.
-fn prompt_label(
-    label: &str,
-    prefilled: Option<String>,
-    validate: impl Fn(&str) -> Result<(), DomainError>,
-) -> Result<String, CliError> {
-    let mut default = prefilled;
-    loop {
-        let value = input::prompt_line(label, default.as_deref())?;
-        match validate(&value) {
-            Ok(()) => return Ok(value),
-            Err(err) => {
-                eprintln!("  ! {err}; please try again.");
-                default = (!value.is_empty()).then_some(value);
-            }
-        }
-    }
-}
-
-/// Open the editor for the content, re-validating after each save and offering
-/// to re-open on failure (seeded with the just-edited text so work isn't lost).
-fn prompt_content(initial: String) -> Result<String, CliError> {
-    let mut seed = initial;
-    loop {
-        eprintln!("Opening your editor for the LaTeX content (save and quit when done)…");
-        let content = input::edit_in_editor(&seed)?;
-        match LatexContent::new(content.as_str()) {
-            Ok(_) => return Ok(content),
-            Err(err) => {
-                eprintln!("  ! {err}");
-                if !input::confirm("Re-open the editor to fix it?")? {
-                    return Err(CliError::Aborted);
-                }
-                seed = content;
-            }
-        }
-    }
 }
 
 /// Resolve the initial editor buffer for interactive mode: an inline `--content`
