@@ -37,33 +37,23 @@ fn select_from_menu(outputs: &[PathBuf]) -> Result<Option<PathBuf>, CliError> {
         eprintln!("{:>3}. {}", i + 1, file_label(path));
     }
 
-    loop {
-        let choice = input::prompt_line("Open which? (number or name, blank to cancel)", None)?;
-        if choice.is_empty() {
-            return Ok(None);
-        }
-
-        // A bare number selects by position in the menu above.
-        if let Ok(n) = choice.parse::<usize>() {
-            match outputs.get(n.wrapping_sub(1)) {
-                Some(path) if n >= 1 => return Ok(Some(path.clone())),
-                _ => {
-                    eprintln!("  ! choose a number between 1 and {}", outputs.len());
-                    continue;
-                }
+    input::pick_from_menu(
+        "Open which? (number or name, blank to cancel)",
+        outputs.len(),
+        |n| outputs.get(n - 1).cloned(),
+        |choice| match resolve_by_name(outputs, choice) {
+            Ok(path) => Ok(Some(path)),
+            Err(CliError::OutputNotFound { .. }) => {
+                eprintln!("  ! no output matches '{choice}'");
+                Ok(None)
             }
-        }
-
-        // Otherwise treat it as a file name / substring.
-        match resolve_by_name(outputs, &choice) {
-            Ok(path) => return Ok(Some(path)),
-            Err(CliError::OutputNotFound { .. }) => eprintln!("  ! no output matches '{choice}'"),
             Err(CliError::AmbiguousOutput { count, .. }) => {
-                eprintln!("  ! '{choice}' matches {count} files; be more specific")
+                eprintln!("  ! '{choice}' matches {count} files; be more specific");
+                Ok(None)
             }
-            Err(other) => return Err(other),
-        }
-    }
+            Err(other) => Err(other),
+        },
+    )
 }
 
 /// Resolve a query to exactly one output file: an exact (case-insensitive) file

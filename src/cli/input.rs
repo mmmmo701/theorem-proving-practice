@@ -49,6 +49,47 @@ pub fn prompt_line(label: &str, default: Option<&str>) -> Result<String, CliErro
     })
 }
 
+/// Loop prompting `prompt` (on stderr) so the user can pick an item by bare
+/// number or by free-text lookup, retrying on an unmatched entry. Returns
+/// `None` if the user cancels with a blank line.
+///
+/// `count` is the number of numbered items shown above the prompt (used only
+/// for the "choose a number between..." message); `by_number` maps a 1-based
+/// choice to an item. `resolve` looks up free text (typically a name/id
+/// prefix): `Ok(None)` means "no match, already reported via `eprintln!`, let
+/// the user retry"; any `Err` aborts the menu immediately rather than
+/// retrying, since it signals a real failure (e.g. a storage error), not a
+/// bad selection.
+///
+/// Shared by every `-i` numbered-menu prompt (`delete -i`, `open`, `vault
+/// switch -i`) so each only has to print its menu and describe how to look an
+/// entry up.
+pub fn pick_from_menu<T>(
+    prompt: &str,
+    count: usize,
+    by_number: impl Fn(usize) -> Option<T>,
+    resolve: impl Fn(&str) -> Result<Option<T>, CliError>,
+) -> Result<Option<T>, CliError> {
+    loop {
+        let choice = prompt_line(prompt, None)?;
+        if choice.is_empty() {
+            return Ok(None);
+        }
+
+        if let Ok(n) = choice.parse::<usize>() {
+            if let Some(item) = (n >= 1).then(|| by_number(n)).flatten() {
+                return Ok(Some(item));
+            }
+            eprintln!("  ! choose a number between 1 and {count}");
+            continue;
+        }
+
+        if let Some(item) = resolve(&choice)? {
+            return Ok(Some(item));
+        }
+    }
+}
+
 /// Ask a yes/no question, defaulting to "no". Anything but `y`/`yes` is `false`.
 pub fn confirm(question: &str) -> Result<bool, CliError> {
     let answer = prompt_line(&format!("{question} [y/N]"), None)?;

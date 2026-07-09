@@ -9,6 +9,7 @@ pub mod edit;
 pub mod list;
 pub mod open;
 pub mod show;
+pub mod vault;
 
 use crate::app::App;
 use crate::cli::{CliError, input};

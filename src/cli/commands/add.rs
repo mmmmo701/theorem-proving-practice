@@ -20,6 +20,7 @@ pub fn run(app: &mut App, args: AddArgs) -> Result<(), CliError> {
     println!("Added theorem {}", theorem.id);
     println!("  subject: {}", theorem.subject.as_str());
     println!("  name:    {}", theorem.name.as_str());
+    println!("  vault:   {}", app.vault_name());
     Ok(())
 }
 

@@ -13,23 +13,31 @@ mod draw;
 mod edit;
 mod list;
 mod open;
+mod vaults;
 
 pub use add::AddRequest;
 pub use draw::{DrawOptions, DrawOutcome};
 pub use edit::EditRequest;
+pub use vaults::VaultEnv;
 
 use std::path::PathBuf;
 
 use crate::config::{Config, ConfigError};
-use crate::domain::DomainError;
+use crate::domain::{DomainError, VaultName};
 use crate::render::{HtmlRenderer, LatexRenderer, RenderError, Renderer};
 use crate::selection::{ForgettingCurveSelector, SelectionError, Selector};
 use crate::storage::{JsonStore, Repository, StorageError};
+use crate::vaults::VaultError;
 
 /// The application: configuration plus the storage, selection, and render
-/// backends. Use-case methods live in the submodules.
+/// backends, bound to one vault. Use-case methods live in the submodules.
 pub struct App {
     config: Config,
+    /// Which vault this instance is bound to — set by [`App::bootstrap_in`]
+    /// (or left at [`VaultName::default_vault`] by [`App::new`], which
+    /// doesn't itself know about vaults; existing tests construct it that
+    /// way and don't care which name is reported).
+    vault: VaultName,
     repo: Box<dyn Repository>,
     selector: Box<dyn Selector>,
     /// Renderer for the default PDF format.
@@ -45,6 +53,7 @@ impl App {
     pub fn new(config: Config, repo: Box<dyn Repository>) -> Self {
         let renderer = LatexRenderer::new(config.latex_engine.clone());
         Self {
+            vault: VaultName::default_vault(),
             repo,
             selector: Box::new(ForgettingCurveSelector::new()),
             renderer: Box::new(renderer),
@@ -71,19 +80,36 @@ impl App {
         self
     }
 
-    /// Build the app with the default wiring: load configuration, ensure its
-    /// directories exist, and back it with a [`JsonStore`].
-    pub fn bootstrap() -> Result<Self, AppError> {
-        let config = Config::load()?;
-        log::debug!("configuration: {config:?}");
-        config.ensure_dirs()?;
-        let repo = JsonStore::new(config.store_path());
-        Ok(Self::new(config, Box::new(repo)))
+    /// Build the app for the vault resolved from `vault_override` (the
+    /// `--vault` flag or its env var, if given) or, when `None`, `vaults`'
+    /// persisted current vault — see [`VaultEnv::resolve_vault`] for exactly
+    /// how that resolution and its error cases work.
+    ///
+    /// Binds this instance's [`Repository`] to the resolved vault's store and
+    /// its output directory to that vault's output subdirectory, so every
+    /// other use-case (`draw`, `list`, `open`, …) needs no vault-awareness of
+    /// its own.
+    pub fn bootstrap_in(vaults: &VaultEnv, vault_override: Option<&str>) -> Result<Self, AppError> {
+        let name = vaults.resolve_vault(vault_override)?;
+
+        let mut config = vaults.config().clone();
+        let store_path = config.vault_store_path(&name);
+        config.output_dir = config.vault_output_dir(&name);
+
+        let repo = JsonStore::new(store_path);
+        let mut app = Self::new(config, Box::new(repo));
+        app.vault = name;
+        Ok(app)
     }
 
     /// The resolved configuration for this run.
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    /// The vault this instance is bound to.
+    pub fn vault_name(&self) -> &VaultName {
+        &self.vault
     }
 }
 
@@ -110,6 +136,15 @@ pub enum AppError {
     #[error(transparent)]
     Render(#[from] RenderError),
 
+    #[error(transparent)]
+    Vault(#[from] VaultError),
+
+    #[error(
+        "current vault '{name}' no longer exists; run 'vault list' and 'vault switch' to \
+         pick another, or 'vault add {name}' to recreate it"
+    )]
+    CurrentVaultMissing { name: VaultName },
+
     #[error("output file {path} already exists; omit --no-clobber to replace it")]
     OutputExists { path: PathBuf },
 
@@ -129,8 +164,12 @@ impl AppError {
     pub fn exit_code(&self) -> u8 {
         match self {
             AppError::Domain(_) | AppError::Selection(_) | AppError::OutputExists { .. } => 1,
-            AppError::Config(_) | AppError::Storage(_) | AppError::OutputListing { .. } => 2,
+            AppError::Config(_)
+            | AppError::Storage(_)
+            | AppError::OutputListing { .. }
+            | AppError::CurrentVaultMissing { .. } => 2,
             AppError::Render(_) => 3,
+            AppError::Vault(err) => err.exit_code(),
         }
     }
 }

@@ -6,11 +6,10 @@
 //! for a single-user prototype; the [`Repository`] trait lets a database back
 //! end drop in later without touching anything above it.
 
-use std::io::{ErrorKind, Write};
-use std::path::{Path, PathBuf};
+use std::io::ErrorKind;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use tempfile::NamedTempFile;
 
 use super::{Repository, StorageError};
 use crate::domain::{Theorem, TheoremId};
@@ -101,39 +100,22 @@ impl JsonStore {
         })
         .map_err(|source| StorageError::Serialize { source })?;
 
-        let dir = self.parent_dir();
-        std::fs::create_dir_all(dir).map_err(|source| StorageError::Write {
-            path: dir.to_path_buf(),
-            source,
-        })?;
-
-        // Write to a temp file in the *same* directory (so the final rename is a
-        // cheap, atomic same-filesystem operation), fsync, then rename over the
-        // target. A crash at any point leaves the old file intact.
-        let mut tmp = NamedTempFile::new_in(dir).map_err(|source| StorageError::Write {
-            path: dir.to_path_buf(),
-            source,
-        })?;
-        tmp.write_all(&json)
-            .and_then(|()| tmp.as_file().sync_all())
-            .map_err(|source| StorageError::Write {
-                path: self.path.clone(),
-                source,
-            })?;
-        tmp.persist(&self.path).map_err(|err| StorageError::Write {
+        crate::fs_atomic::write(&self.path, &json).map_err(|source| StorageError::Write {
             path: self.path.clone(),
-            source: err.error,
-        })?;
-        Ok(())
+            source,
+        })
     }
 
-    /// Directory containing the store file, defaulting to the current directory
-    /// when the path has no parent component.
-    fn parent_dir(&self) -> &Path {
-        match self.path.parent() {
-            Some(p) if !p.as_os_str().is_empty() => p,
-            _ => Path::new("."),
+    /// Ensure the store file exists, writing an empty envelope if it does not.
+    /// Idempotent; existing content (even if non-empty) is left untouched.
+    /// Used by vault creation to make a fresh vault durable and visible
+    /// before its first theorem, and to surface a permissions problem at
+    /// creation time rather than at the first `add`.
+    pub fn ensure_exists(&self) -> Result<(), StorageError> {
+        if self.path.exists() {
+            return Ok(());
         }
+        self.save(&[])
     }
 }
 

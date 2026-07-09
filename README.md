@@ -29,6 +29,48 @@ The examples below use `cargo run --` for convenience.
 
 ## Usage
 
+### Vaults
+
+Every command operates on exactly one **vault**: an independent theorem
+library with its own theorems, draw stats, and generated outputs — vaults
+never see each other's data. A fresh install starts in an implicit `default`
+vault, so nothing here is required unless you want more than one library
+(e.g. one per course, or a scratch vault for experimenting).
+
+```sh
+cargo run -- vault list              # all vaults; the current one is marked *
+cargo run -- vault current           # name of the current vault
+cargo run -- vault add exams         # create a new, empty vault (doesn't switch to it)
+cargo run -- vault switch exams      # persist "exams" as the current vault
+```
+
+`vault add` and `vault switch` also support `-i`/`--interactive`:
+
+```sh
+cargo run -- vault add -i            # prompts for a name; offers to switch to it
+cargo run -- vault switch -i         # numbered menu of vaults; blank cancels
+```
+
+`vault switch <name>` accepts a unique prefix, the same way theorem ids do
+elsewhere in this tool. Vault names are folded to lowercase and may contain
+only letters, digits, `-`, and `_`.
+
+To run a single command against a different vault without switching:
+
+```sh
+cargo run -- --vault exams list
+cargo run -- --vault exams draw
+```
+
+`--vault` (or the `THEOREM_PROVING_PRACTICE_VAULT` environment variable, which
+it overrides) must name a vault that already exists — neither ever creates one
+on the fly, so a typo is reported rather than silently starting an empty
+vault. It cannot be combined with the `vault` subcommand itself.
+
+If you used this tool before vaults existed, your existing library is
+migrated automatically — and only once — into the `default` vault, the first
+time you run any command afterward.
+
 ### Add a theorem
 
 Inline content:
@@ -161,22 +203,29 @@ By default the tool keeps everything under a fixed, per-user location so it
 behaves the same no matter which directory you run it from (important once it is
 installed system-wide, e.g. from a `.deb`):
 
-- **Data** (`theorems.json`, the library): `$XDG_DATA_HOME/theorem-proving-practice/data`,
-  falling back to `~/.local/share/theorem-proving-practice/data`.
-- **Output** (`practice-YYYY-MM-DD.pdf` / `.html` sheets):
-  `…/theorem-proving-practice/output`.
+- **Vaults** (each vault's `theorems.json`):
+  `$XDG_DATA_HOME/theorem-proving-practice/vaults/<name>/`, falling back to
+  `~/.local/share/theorem-proving-practice/vaults/<name>/`.
+- **Current vault** (`state.json`, which vault is current): next to `vaults/`,
+  i.e. `…/theorem-proving-practice/state.json`.
+- **Output** (`practice-YYYY-MM-DD.pdf` / `.html` sheets), one subdirectory
+  per vault: `…/theorem-proving-practice/output/<name>/`.
 
-Both directories are created on first use. You can override either location:
+These are created as needed — a vault's directory on `vault add`, its output
+subdirectory on its first `draw`. You can override the roots they live under:
 
 | Variable | Overrides |
 |----------|-----------|
-| `THEOREM_PROVING_PRACTICE_DATA_DIR`   | where the theorem library is stored |
-| `THEOREM_PROVING_PRACTICE_OUTPUT_DIR` | where practice sheets are written, and what `open` lists |
+| `THEOREM_PROVING_PRACTICE_DATA_DIR`   | the root under which `vaults/` and `state.json` live |
+| `THEOREM_PROVING_PRACTICE_OUTPUT_DIR` | the root under which each vault's output subdirectory is written, and what `open` lists |
+| `THEOREM_PROVING_PRACTICE_VAULT`      | which vault to use for this invocation (see [Vaults](#vaults)) |
 | `THEOREM_PROVING_PRACTICE_OPENER`     | the command `open` uses to launch files |
 
-A single `draw` can also write elsewhere with `--out-dir` (see above). If neither
-`XDG_DATA_HOME` nor `HOME` is set, the tool falls back to `data/` and `output/`
-relative to the current directory.
+A single `draw` can also write elsewhere with `--out-dir` (see above), and a
+single command can target a different vault with `--vault` (see
+[Vaults](#vaults)). If neither `XDG_DATA_HOME` nor `HOME` is set, the tool
+falls back to `vaults/`, `state.json`, and `output/` relative to the current
+directory.
 
 ## Diagnostics
 

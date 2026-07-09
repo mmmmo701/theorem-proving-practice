@@ -20,11 +20,13 @@ pub fn run(app: &mut App, args: EditArgs) -> Result<(), CliError> {
         return Err(CliError::NoEditsRequested);
     }
 
+    let vault = app.vault_name().clone();
     match app.edit(&theorem.id, request)? {
         Some(updated) => {
             println!("Edited theorem {}", updated.id);
             println!("  subject: {}", updated.subject.as_str());
             println!("  name:    {}", updated.name.as_str());
+            println!("  vault:   {vault}");
             Ok(())
         }
         // Resolved a moment ago but gone now (e.g. a concurrent delete).

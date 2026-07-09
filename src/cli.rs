@@ -13,8 +13,12 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use crate::app::{App, AppError};
+use crate::app::{App, AppError, VaultEnv};
 use args::{Cli, Command};
+
+/// Env var naming the vault to operate on for this invocation, overridden by
+/// the `--vault` flag. Empty is treated as unset.
+const VAULT_ENV: &str = "THEOREM_PROVING_PRACTICE_VAULT";
 
 /// Parse arguments, build the app, and execute the requested command.
 pub fn run() -> Result<(), CliError> {
@@ -22,17 +26,39 @@ pub fn run() -> Result<(), CliError> {
     let cli = Cli::parse();
     init_logging(cli.verbose);
 
-    let mut app = App::bootstrap()?;
+    if cli.vault.is_some() && matches!(cli.command, Command::Vault(_)) {
+        return Err(CliError::VaultFlagWithVaultCommand);
+    }
+
+    // Phase 1: the vault store itself, which must work even if the current
+    // vault is broken — `vault add`/`vault switch` are the recovery path.
+    let vaults = VaultEnv::bootstrap()?;
+    let vault_override = resolve_vault_override(cli.vault);
 
     match cli.command {
-        Command::Add(args) => commands::add::run(&mut app, args),
-        Command::Draw(args) => commands::draw::run(&mut app, args),
-        Command::List => commands::list::run(&app),
-        Command::Show(args) => commands::show::run(&app, args),
-        Command::Edit(args) => commands::edit::run(&mut app, args),
-        Command::Delete(args) => commands::delete::run(&mut app, args),
-        Command::Open(args) => commands::open::run(&app, args),
+        Command::Vault(args) => commands::vault::run(&vaults, args.command),
+        other => {
+            // Phase 2: bind the app to the resolved vault for every other
+            // command.
+            let mut app = App::bootstrap_in(&vaults, vault_override.as_deref())?;
+            match other {
+                Command::Add(args) => commands::add::run(&mut app, args),
+                Command::Draw(args) => commands::draw::run(&mut app, args),
+                Command::List => commands::list::run(&app),
+                Command::Show(args) => commands::show::run(&app, args),
+                Command::Edit(args) => commands::edit::run(&mut app, args),
+                Command::Delete(args) => commands::delete::run(&mut app, args),
+                Command::Open(args) => commands::open::run(&app, args),
+                Command::Vault(_) => unreachable!("handled above"),
+            }
+        }
     }
+}
+
+/// Resolve the `--vault` override: the flag wins; otherwise
+/// `THEOREM_PROVING_PRACTICE_VAULT`, if set and non-empty.
+fn resolve_vault_override(flag: Option<String>) -> Option<String> {
+    flag.or_else(|| std::env::var(VAULT_ENV).ok().filter(|v| !v.trim().is_empty()))
 }
 
 /// Initialize logging. `RUST_LOG`, if set, wins; otherwise the `-v` count picks
@@ -117,6 +143,15 @@ pub enum CliError {
 
     #[error("opener '{opener}' exited with an error")]
     OpenerFailed { opener: String },
+
+    #[error("no vault matches '{query}'")]
+    VaultNotFound { query: String },
+
+    #[error("'{query}' matches {count} vaults; use a longer prefix")]
+    AmbiguousVault { query: String, count: usize },
+
+    #[error("--vault cannot be combined with the 'vault' subcommand")]
+    VaultFlagWithVaultCommand,
 }
 
 impl CliError {
@@ -139,7 +174,10 @@ impl CliError {
             | CliError::OutputNotFound { .. }
             | CliError::AmbiguousOutput { .. }
             | CliError::OpenerLaunch { .. }
-            | CliError::OpenerFailed { .. } => 1,
+            | CliError::OpenerFailed { .. }
+            | CliError::VaultNotFound { .. }
+            | CliError::AmbiguousVault { .. }
+            | CliError::VaultFlagWithVaultCommand => 1,
         }
     }
 }

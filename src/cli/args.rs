@@ -15,6 +15,15 @@ pub struct Cli {
     #[arg(short, long, global = true, action = ArgAction::Count)]
     pub verbose: u8,
 
+    /// Operate on this vault for this invocation only, instead of the
+    /// persisted current vault. The vault must already exist — it is never
+    /// auto-created, so a typo is reported rather than silently starting an
+    /// empty vault. Also settable via `THEOREM_PROVING_PRACTICE_VAULT`; this
+    /// flag wins if both are given. Cannot be combined with the `vault`
+    /// subcommand itself.
+    #[arg(long, global = true, value_name = "NAME")]
+    pub vault: Option<String>,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -41,6 +50,61 @@ pub enum Command {
 
     /// Open a generated output (PDF/HTML) with the system viewer.
     Open(OpenArgs),
+
+    /// Manage vaults: independent theorem libraries. Every other command
+    /// operates on the current vault (or `--vault NAME` for one invocation).
+    Vault(VaultArgs),
+}
+
+/// Arguments for the `vault` command group.
+#[derive(Debug, Args)]
+pub struct VaultArgs {
+    #[command(subcommand)]
+    pub command: VaultCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum VaultCommand {
+    /// List all vaults; the current one is marked.
+    List,
+
+    /// Print the name of the current vault (script-friendly).
+    Current,
+
+    /// Create a new, empty vault. Does not switch to it, unless
+    /// `--interactive` is given and you confirm the prompt to do so.
+    Add(VaultAddArgs),
+
+    /// Switch the persisted current vault, by name/prefix or from a menu.
+    Switch(VaultSwitchArgs),
+}
+
+/// Arguments for `vault add`.
+#[derive(Debug, Args)]
+pub struct VaultAddArgs {
+    /// Name of the vault to create. Omit it when using `--interactive`.
+    #[arg(required_unless_present = "interactive")]
+    pub name: Option<String>,
+
+    /// Prompt for the name (re-prompting until it validates) instead of
+    /// taking it as an argument; a given `name` pre-fills the prompt. Asks
+    /// afterward whether to switch to the new vault.
+    #[arg(long, short)]
+    pub interactive: bool,
+}
+
+/// Arguments for `vault switch`.
+#[derive(Debug, Args)]
+pub struct VaultSwitchArgs {
+    /// Name of the vault to switch to, or a unique prefix of it. Omit it when
+    /// using `--interactive`.
+    #[arg(required_unless_present = "interactive")]
+    pub name: Option<String>,
+
+    /// Pick the vault to switch to from a numbered menu instead of giving a
+    /// name.
+    #[arg(long, short)]
+    pub interactive: bool,
 }
 
 /// Arguments for the `open` command.

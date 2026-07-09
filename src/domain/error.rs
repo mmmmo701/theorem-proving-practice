@@ -19,4 +19,9 @@ pub enum DomainError {
 
     #[error("{field} contains disallowed control characters")]
     ControlChars { field: &'static str },
+
+    #[error(
+        "{field} must start with a letter or digit and contain only letters, digits, '-', or '_'"
+    )]
+    InvalidVaultName { field: &'static str },
 }

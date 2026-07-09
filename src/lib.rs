@@ -14,6 +14,8 @@ pub mod app;
 pub mod cli;
 pub mod config;
 pub mod domain;
+mod fs_atomic;
 pub mod render;
 pub mod selection;
 pub mod storage;
+pub mod vaults;

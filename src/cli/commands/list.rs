@@ -12,6 +12,8 @@ const MAX_SUBJECT_COL: usize = 24;
 const MAX_NAME_COL: usize = 40;
 
 pub fn run(app: &App) -> Result<(), CliError> {
+    eprintln!("Vault: {}", app.vault_name());
+
     let theorems = app.list()?;
     if theorems.is_empty() {
         println!("No theorems stored yet. Add one with `add`.");
