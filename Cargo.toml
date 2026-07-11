@@ -1,6 +1,6 @@
 [package]
 name = "theorem-proving-practice"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 description = "A small command-line tool for practicing proofs."
 license = "MIT"                       # or license-file = "LICENSE"
